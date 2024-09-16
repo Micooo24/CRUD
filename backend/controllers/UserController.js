@@ -83,39 +83,48 @@ try {
     res.status(500).json({ error: "Server error" });
 }
 };
-
 exports.update = async (req, res) => {
   const { slug } = req.params;
-  const { name, email, address, existingImages } = req.body; // Accept existing image data
+  const { name, email, address } = req.body;  // Simplified the form fields
   const newSlug = slugify(name, { lower: true });
 
   try {
-    // Find the user to update
+    // Step 1: Find the user to update
     const user = await User.findOne({ slug });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Handle image updates
-    let updatedImageUrls = existingImages || user.image;  // Preserve existing images if provided
+    // Step 2: Clear old images if new images are being uploaded
+    let updatedImageUrls = [];
 
+    // Step 3: Handle image upload - only overwrite if new images are provided
     if (req.files && req.files.length > 0) {
-      // Upload new images if any are provided
-      const uploadedImages = [];
+      // Delete old images on Cloudinary (optional: if you store Cloudinary image public IDs)
+      if (user.image && user.image.length > 0) {
+        for (const imageUrl of user.image) {
+          const publicId = imageUrl.split('/').pop().split('.')[0]; // Extract public ID from URL
+          await cloudinary.uploader.destroy(publicId); // Delete image from Cloudinary
+        }
+      }
+
+      // Upload new images
       for (const file of req.files) {
         const result = await cloudinary.uploader.upload(file.path);
-        uploadedImages.push(result.secure_url);
-        fs.unlinkSync(file.path);  // Remove the file after uploading to Cloudinary
+        updatedImageUrls.push(result.secure_url);  // Add new image URLs
+        fs.unlinkSync(file.path);  // Remove the local file after uploading to Cloudinary
       }
-      updatedImageUrls = [...updatedImageUrls, ...uploadedImages]; // Append new images
+    } else {
+      // If no new images are uploaded, retain the existing images
+      updatedImageUrls = user.image;
     }
 
-    // Update user fields and images
+    // Step 4: Update user fields and overwrite the image field
     user.name = name;
     user.email = email;
     user.address = address;
-    user.image = updatedImageUrls;
+    user.image = updatedImageUrls;  // Overwrite old images with new images (or retain if no new images)
     user.slug = newSlug;
 
     // Save the updated user
@@ -130,6 +139,7 @@ exports.update = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 exports.remove = async (req, res) => {
     const { slug } = req.params;

@@ -16,5 +16,5 @@ router.put('/users/:slug', upload.array('image', 5), update);
 router.get('/users/all', getAllUsers);
 router.get('/users/:slug', getUserBySlug);
 router.delete('/users/:slug', remove);
-router.put('/users/:slug', update);
+// router.put('/users/:slug', update);
 module.exports = router;
